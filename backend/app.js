@@ -64,7 +64,7 @@ async function main() {
     console.log(`🟢 Ping         : http://localhost:${PORT}/ping\n`);
 
     // Boot intelligence engine
-    await startEngine();
+    await startEngine(broadcaster);
   });
 }
 

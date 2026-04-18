@@ -35,4 +35,16 @@ async function getTicker(symbol) {
   }
 }
 
-module.exports = { getKlines, getTicker };
+async function getOrderBook(symbol, limit = 20) {
+  try {
+    const res = await axios.get(`${BASE_URL}/api/v3/depth`, {
+      params: { symbol: symbol.toUpperCase(), limit }
+    });
+    return res.data; // { bids: [[price,qty]], asks: [[price,qty]] }
+  } catch (err) {
+    console.error("OrderBook REST error:", err.message);
+    return null;
+  }
+}
+
+module.exports = { getKlines, getTicker, getOrderBook };

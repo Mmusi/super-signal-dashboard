@@ -37,6 +37,9 @@ export const useStore = create((set, get) => ({
     ws.onopen = () => {
       console.log("📡 WS connected");
       set({ connected: true, ws });
+      // Hydrate signals and heatmap immediately via REST
+      get().loadSignals();
+      get().loadHeatmap("BTCUSDT");
     };
 
     ws.onclose = () => {
@@ -77,6 +80,10 @@ export const useStore = create((set, get) => ({
         set({ signals: msg.data || [], topSignals: (msg.data || []).slice(0, 3) });
         break;
 
+      case "CANDLES_UPDATE":
+        set((s) => ({ candles: { ...s.candles, [`${msg.symbol}_1m`]: msg.data } }));
+        break;
+
       case "HEATMAP_UPDATE":
         set({ heatmap: msg.data });
         break;
@@ -87,6 +94,39 @@ export const useStore = create((set, get) => ({
   },
 
   // REST loaders
+  async loadSignals() {
+    try {
+      const r = await fetch("/api/signals");
+      const j = await r.json();
+      if (j.ok && j.data && j.data.length > 0) {
+        set({ signals: j.data, topSignals: j.data.slice(0, 3) });
+      }
+    } catch (e) {
+      console.warn("loadSignals failed:", e);
+    }
+  },
+
+  async loadHeatmap(symbol = "BTCUSDT") {
+    try {
+      const r = await fetch(`/api/market/orderbook/${symbol}`);
+      const j = await r.json();
+      if (j.ok) set({ heatmap: j.data });
+    } catch (e) {
+      console.warn("loadHeatmap failed:", e);
+    }
+  },
+
+  async loadCandles(symbol = "BTCUSDT", tf = "1m") {
+    try {
+      const limit = ["1w","1M"].includes(tf) ? 60 : ["4h"].includes(tf) ? 120 : 150;
+      const r = await fetch(`/api/market/candles/${symbol}?tf=${tf}&limit=${limit}`);
+      const j = await r.json();
+      if (j.ok) set((s) => ({ candles: { ...s.candles, [`${symbol}_${tf}`]: j.data } }));
+    } catch (e) {
+      console.warn("loadCandles failed:", e);
+    }
+  },
+
   async loadTrades() {
     const r = await fetch("/api/performance/trades?limit=50");
     const j = await r.json();

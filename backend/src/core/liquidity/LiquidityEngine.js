@@ -1,6 +1,6 @@
 // Liquidity + Order Flow Master Engine
 // Combines all liquidity and order flow sub-engines into single output
-const { findLiquidityZones } = require("./LiquidityZones");
+const { findLiquidityZones } = require("./liquidityZones");
 const { detectStopHunt } = require("./StopHuntDetector");
 const { analyzeOrderFlow } = require("../orderflow/OrderFlowEngine");
 const { detectAbsorption } = require("../orderflow/AbsorptionDetector");

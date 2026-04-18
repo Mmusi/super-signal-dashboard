@@ -18,7 +18,8 @@ function calculateConfluence(input) {
   score += Math.min(20, compression.score || 0);
 
   // 💧 LIQUIDITY CONFIRMATION (20 pts)
-  if (liquidity && liquidity.stopHunt) score += 20;
+  // Note: stopHunt is a top-level context key, passed in via input directly
+  if (input.stopHunt) score += 20;
   if (liquidity && liquidity.buySide && liquidity.buySide.length > 0) score += 10;
   if (liquidity && liquidity.sellSide && liquidity.sellSide.length > 0) score += 5;
 

@@ -1,5 +1,5 @@
 // LiquidityMap.js - builds a price-keyed map of liquidity clusters
-const { findLiquidityZones } = require("./LiquidityZones");
+const { findLiquidityZones } = require("./liquidityZones");
 
 function buildLiquidityMap(candles) {
   const zones = findLiquidityZones(candles);
