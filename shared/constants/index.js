@@ -1,0 +1,43 @@
+// Shared constants used by both backend and frontend
+module.exports = {
+  REGIMES: {
+    COMPRESSION:   "COMPRESSION",
+    EXPANSION:     "EXPANSION",
+    TRENDING_UP:   "TRENDING_UP",
+    TRENDING_DOWN: "TRENDING_DOWN",
+    CHOP:          "CHOP"
+  },
+
+  ACTIONS: {
+    TRADE:    "TRADE",
+    WATCH:    "WATCH",
+    NO_TRADE: "NO_TRADE"
+  },
+
+  SCORE_TIERS: {
+    STRONG: 85,
+    GOOD:   80,
+    WATCH:  75,
+    WEAK:   0
+  },
+
+  SETUP_TYPES: {
+    COMPRESSION_BREAKOUT:    "COMPRESSION_BREAKOUT",
+    LIQUIDITY_SWEEP_REVERSAL:"LIQUIDITY_SWEEP_REVERSAL",
+    TREND_CONTINUATION:      "TREND_CONTINUATION"
+  },
+
+  WS_EVENTS: {
+    SIGNAL_UPDATE:  "SIGNAL_UPDATE",
+    SCANNER_UPDATE: "SCANNER_UPDATE",
+    HEATMAP_UPDATE: "HEATMAP_UPDATE",
+    HEALTH_UPDATE:  "HEALTH_UPDATE",
+    CONNECTED:      "CONNECTED"
+  },
+
+  MODES: {
+    PAPER:    "PAPER",
+    LIVE:     "LIVE",
+    BACKTEST: "BACKTEST"
+  }
+};

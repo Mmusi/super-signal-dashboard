@@ -1,0 +1,27 @@
+{
+  "name": "super-signal-backend",
+  "version": "1.0.0",
+  "description": "Super Signal Dashboard - Backend Intelligence Engine",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "backtest": "node scripts/runBacktest.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "ws": "^8.16.0",
+    "express": "^4.18.2",
+    "axios": "^1.6.7",
+    "dotenv": "^16.4.1",
+    "sqlite3": "^5.1.7",
+    "uuid": "^9.0.0",
+    "node-fetch": "^2.7.0",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3",
+    "jest": "^29.7.0"
+  }
+}

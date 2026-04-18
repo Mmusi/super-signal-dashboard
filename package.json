@@ -1,0 +1,17 @@
+{
+  "name": "super-signal-dashboard",
+  "version": "1.0.0",
+  "description": "Institutional-grade crypto signal dashboard",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "start:backend":  "cd backend && node app.js",
+    "dev:backend":    "cd backend && npm run dev",
+    "dev:frontend":   "cd frontend && npm run dev",
+    "fetch:data":     "node scripts/fetchHistorical.js",
+    "backtest":       "node scripts/runBacktest.js",
+    "test":           "jest --config jest.config.js"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
