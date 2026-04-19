@@ -1,33 +1,63 @@
 // Entry Engine - builds precise entry, SL, TP from signal + structure + liquidity + ATR
+// LONG:  entry < TP (price goes UP),  SL below entry
+// SHORT: entry > TP (price goes DOWN), SL above entry
+
 function buildEntry(signal, structure, liquidity, atr) {
   if (!signal || signal.action !== "TRADE") return null;
 
   const lastPrice = structure.lastPrice;
+  if (!lastPrice || !atr || atr === 0) return null;
+
   let entry = lastPrice;
-  let sl = 0;
-  let tp = 0;
+  let sl, tp;
 
-  // LONG: SL below sell-side liquidity, TP at buy-side liquidity
   if (signal.direction === "LONG") {
-    sl = (liquidity && liquidity.sellSide && liquidity.sellSide[0])
-      ? liquidity.sellSide[0].price
+    // SL: below current price by 1.5 ATR (or sell-side liquidity if below price)
+    const sellSideCandidate = liquidity?.sellSide?.find(z => z.price < lastPrice);
+    sl = sellSideCandidate
+      ? Math.min(sellSideCandidate.price, lastPrice - atr * 1.5)
       : lastPrice - atr * 1.5;
-    tp = (liquidity && liquidity.buySide && liquidity.buySide[0])
-      ? liquidity.buySide[0].price
+
+    // TP: above current price by 2 ATR (or buy-side liquidity if above price)
+    const buySideCandidate = liquidity?.buySide?.find(z => z.price > lastPrice);
+    tp = buySideCandidate
+      ? Math.max(buySideCandidate.price, lastPrice + atr * 2)
       : lastPrice + atr * 2;
+
+    // Safety: ensure LONG geometry is correct
+    if (sl >= entry) sl = entry - atr * 1.5;
+    if (tp <= entry) tp = entry + atr * 2;
   }
 
-  // SHORT: SL above buy-side liquidity, TP at sell-side liquidity
   if (signal.direction === "SHORT") {
-    sl = (liquidity && liquidity.buySide && liquidity.buySide[0])
-      ? liquidity.buySide[0].price
+    // SL: above current price by 1.5 ATR (or buy-side liquidity if above price)
+    const buySideCandidate = liquidity?.buySide?.find(z => z.price > lastPrice);
+    sl = buySideCandidate
+      ? Math.max(buySideCandidate.price, lastPrice + atr * 1.5)
       : lastPrice + atr * 1.5;
-    tp = (liquidity && liquidity.sellSide && liquidity.sellSide[0])
-      ? liquidity.sellSide[0].price
+
+    // TP: below current price by 2 ATR (or sell-side liquidity if below price)
+    const sellSideCandidate = liquidity?.sellSide?.find(z => z.price < lastPrice);
+    tp = sellSideCandidate
+      ? Math.min(sellSideCandidate.price, lastPrice - atr * 2)
       : lastPrice - atr * 2;
+
+    // Safety: ensure SHORT geometry is correct
+    if (sl <= entry) sl = entry + atr * 1.5;
+    if (tp >= entry) tp = entry - atr * 2;
   }
 
-  return { entry, stopLoss: sl, takeProfit: tp };
+  const riskReward = sl && tp
+    ? Math.abs(tp - entry) / Math.abs(entry - sl)
+    : null;
+
+  return {
+    entry,
+    stopLoss:   parseFloat(sl.toFixed(4)),
+    takeProfit: parseFloat(tp.toFixed(4)),
+    riskReward: riskReward ? parseFloat(riskReward.toFixed(2)) : null,
+    atr:        parseFloat(atr.toFixed(4))
+  };
 }
 
 module.exports = { buildEntry };
