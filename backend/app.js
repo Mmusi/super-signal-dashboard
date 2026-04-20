@@ -14,6 +14,7 @@ const helmet  = require("helmet");
 const path    = require("path");
 
 const { initDB }           = require("./src/db/init");
+const { initManualTrades } = require("./src/db/manualTradeRepository");  // NEW
 const { createServer }     = require("./src/api/server");
 const { startEngine }      = require("./src/engines/live/EngineOrchestrator");
 const { setBroadcaster }   = require("./src/engines/live/SignalRouter");
@@ -23,6 +24,7 @@ const signalsRoute     = require("./src/api/routes/signals");
 const marketRoute      = require("./src/api/routes/market");
 const performanceRoute = require("./src/api/routes/performance");
 const controlRoute     = require("./src/api/routes/control");
+const tradesRoute      = require("./src/api/routes/trades");  // NEW
 
 const PORT = process.env.PORT || 3001;
 
@@ -45,6 +47,7 @@ async function main() {
   app.use("/api/market",      marketRoute);
   app.use("/api/performance", performanceRoute);
   app.use("/api/control",     controlRoute);
+  app.use("/api/trades",      tradesRoute);  // NEW
 
   // Health ping
   app.get("/ping", (req, res) => res.json({ ok: true, ts: Date.now() }));
