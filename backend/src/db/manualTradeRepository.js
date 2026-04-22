@@ -186,7 +186,7 @@ function getTradeStats(callback) {
   });
 }
 
-module.exports = { initManualTrades, openTrade, closeTrade, getOpenTrades, getAllManualTrades, getTradeById, getTradeStats };
+// (exports consolidated below)
 
 // ── Migration: add BingX columns if they don't exist (safe, idempotent) ──────
 function migrateBingXColumns() {
@@ -256,8 +256,15 @@ function attachCloseDetails(id, exitDetails) {
   });
 }
 
+// ── Delete a trade ───────────────────────────────────────────────────────────
+function deleteTrade(id, callback) {
+  db.run("DELETE FROM manual_trades WHERE id = ?", [id], function(err) {
+    callback(err ? null : { deleted: true, id });
+  });
+}
+
 module.exports = {
-  initManualTrades, openTrade, closeTrade,
+  initManualTrades, openTrade, closeTrade, deleteTrade,
   getOpenTrades, getAllManualTrades, getTradeById, getTradeStats,
   migrateBingXColumns, attachBingXDetails, attachCloseDetails,
 };

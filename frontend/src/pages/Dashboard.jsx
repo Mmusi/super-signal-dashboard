@@ -8,9 +8,10 @@ import TradingChart    from "../components/chart/TradingChart";
 import MissionControl  from "../components/mission/MissionControl";
 import SignalCard      from "../components/signals/SignalCard";
 import RegimeBadge     from "../components/market/RegimeBadge";
+import StrategiesTab   from "../components/strategies/StrategiesTab";
 import { useStore }    from "../store/useStore";
 
-const TABS    = ["🎯 Mission Control", "📊 Signal Overview", "📈 Trading Chart"];
+const TABS    = ["🎯 Mission Control", "📊 Signal Overview", "📈 Trading Chart", "📚 Strategies"];
 const SYMBOLS = ["BTCUSDT","ETHUSDT","SOLUSDT","AVAXUSDT","LINKUSDT","ARBUSDT"];
 
 function MarketOverviewPanel() {
@@ -110,6 +111,7 @@ export default function Dashboard() {
           {activeTab===0&&<MissionControl/>}
           {activeTab===1&&<MarketOverviewPanel/>}
           {activeTab===2&&<TradingChart/>}
+          {activeTab===3&&<StrategiesTab/>}
         </div>
       </div>
 

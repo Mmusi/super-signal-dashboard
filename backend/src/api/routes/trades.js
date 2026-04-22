@@ -7,7 +7,7 @@ const router  = express.Router();
 const {
   openTrade, closeTrade,
   getOpenTrades, getAllManualTrades, getTradeById, getTradeStats,
-  attachBingXDetails, attachCloseDetails,
+  attachBingXDetails, attachCloseDetails, deleteTrade,
 } = require("../../db/manualTradeRepository");
 
 const { predictTP }  = require("../../engines/tpPredictor");
@@ -211,6 +211,15 @@ router.get("/:id", (req, res) => {
   getTradeById(req.params.id, trade => {
     if (!trade) return res.status(404).json({ ok: false, error: "Trade not found" });
     res.json({ ok: true, data: trade });
+  });
+});
+
+// ── DELETE /api/trades/:id ────────────────────────────────────────────────────
+router.delete("/:id", (req, res) => {
+  deleteTrade(req.params.id, result => {
+    if (!result) return res.status(404).json({ ok: false, error: "Trade not found or delete failed" });
+    console.log(`🗑️  Trade deleted: ${req.params.id}`);
+    res.json({ ok: true, deleted: req.params.id });
   });
 });
 

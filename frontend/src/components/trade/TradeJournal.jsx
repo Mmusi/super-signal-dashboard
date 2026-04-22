@@ -152,6 +152,15 @@ export default function TradeJournal() {
 
   useEffect(() => { load(); }, []);
 
+  async function handleDelete(id) {
+    if (!window.confirm("Delete this trade? This cannot be undone.")) return;
+    try {
+      const res = await fetch(`/api/trades/${id}`, { method: "DELETE" });
+      const j = await res.json();
+      if (j.ok) load();
+    } catch(e) { console.error(e); }
+  }
+
   const openTrades  = trades.filter(t => t.status === "OPEN");
   const closedTrades= trades.filter(t => t.status === "CLOSED").sort((a,b) => b.closed_at - a.closed_at);
   const display     = tab === "open" ? openTrades : closedTrades;
@@ -218,7 +227,7 @@ export default function TradeJournal() {
                 <th style={{ textAlign:"right", padding:"6px 8px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em", fontSize:10 }}>P&L</th>
                 <th style={{ textAlign:"left", padding:"6px 8px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em", fontSize:10 }}>Source</th>
                 <th style={{ textAlign:"left", padding:"6px 8px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.05em", fontSize:10 }}>Opened</th>
-                {tab === "open" && <th style={{ padding:"6px 8px" }}></th>}
+                <th style={{ padding:"6px 8px" }}></th>
               </tr>
             </thead>
             <tbody>
@@ -266,14 +275,21 @@ export default function TradeJournal() {
                       </span>
                     </td>
                     <td style={{ padding:"8px", color:"#475569" }}>{fmtDate(t.opened_at)}</td>
-                    {tab === "open" && (
-                      <td style={{ padding:"8px" }}>
-                        <button onClick={() => setClosingTrade(t)}
-                          style={{ padding:"4px 10px", background:"#7f1d1d", border:"1px solid #991b1b", borderRadius:4, color:"#fca5a5", fontSize:11, fontWeight:700, cursor:"pointer" }}>
-                          Close
+                    <td style={{ padding:"8px" }}>
+                      <div style={{ display:"flex", gap:4 }}>
+                        {tab === "open" && (
+                          <button onClick={() => setClosingTrade(t)}
+                            style={{ padding:"4px 8px", background:"#7f1d1d", border:"1px solid #991b1b", borderRadius:4, color:"#fca5a5", fontSize:11, fontWeight:700, cursor:"pointer" }}>
+                            Close
+                          </button>
+                        )}
+                        <button onClick={() => handleDelete(t.id)}
+                          style={{ padding:"4px 8px", background:"rgba(127,29,29,0.3)", border:"1px solid #7f1d1d", borderRadius:4, color:"#6b7280", fontSize:11, cursor:"pointer" }}
+                          title="Delete trade">
+                          🗑
                         </button>
-                      </td>
-                    )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
