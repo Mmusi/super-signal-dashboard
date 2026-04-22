@@ -187,3 +187,77 @@ function getTradeStats(callback) {
 }
 
 module.exports = { initManualTrades, openTrade, closeTrade, getOpenTrades, getAllManualTrades, getTradeById, getTradeStats };
+
+// ── Migration: add BingX columns if they don't exist (safe, idempotent) ──────
+function migrateBingXColumns() {
+  const cols = [
+    "ALTER TABLE manual_trades ADD COLUMN bingx_order_id TEXT",
+    "ALTER TABLE manual_trades ADD COLUMN bingx_sl_order_id TEXT",
+    "ALTER TABLE manual_trades ADD COLUMN bingx_tp_order_id TEXT",
+    "ALTER TABLE manual_trades ADD COLUMN entry_fee_usdt REAL DEFAULT 0",
+    "ALTER TABLE manual_trades ADD COLUMN exit_fee_usdt REAL DEFAULT 0",
+    "ALTER TABLE manual_trades ADD COLUMN funding_fee_usdt REAL DEFAULT 0",
+    "ALTER TABLE manual_trades ADD COLUMN total_fees_usdt REAL DEFAULT 0",
+    "ALTER TABLE manual_trades ADD COLUMN net_pnl_usdt REAL",
+    "ALTER TABLE manual_trades ADD COLUMN exchange TEXT DEFAULT 'MANUAL'",
+    "ALTER TABLE manual_trades ADD COLUMN quantity REAL",
+    "ALTER TABLE manual_trades ADD COLUMN exit_reason TEXT",
+  ];
+  cols.forEach(sql => {
+    db.run(sql, err => {
+      // Ignore "duplicate column" errors — expected on second run
+      if (err && !err.message.includes("duplicate column")) {
+        console.warn("Migration warning:", err.message);
+      }
+    });
+  });
+}
+
+// ── Update trade with BingX execution details ─────────────────────────────────
+function attachBingXDetails(id, details) {
+  return new Promise((resolve, reject) => {
+    db.run(`
+      UPDATE manual_trades SET
+        bingx_order_id    = ?,
+        bingx_sl_order_id = ?,
+        bingx_tp_order_id = ?,
+        entry_fee_usdt    = ?,
+        quantity          = ?,
+        exchange          = 'BINGX'
+      WHERE id = ?
+    `, [
+      details.orderId      || null,
+      details.slOrderId    || null,
+      details.tpOrderId    || null,
+      details.entryFee     || 0,
+      details.quantity     || null,
+      id,
+    ], err => err ? reject(err) : resolve());
+  });
+}
+
+// ── Update trade close with fee details ───────────────────────────────────────
+function attachCloseDetails(id, exitDetails) {
+  return new Promise((resolve, reject) => {
+    db.run(`
+      UPDATE manual_trades SET
+        exit_fee_usdt    = ?,
+        funding_fee_usdt = ?,
+        total_fees_usdt  = ?,
+        net_pnl_usdt     = pnl_usdt - ?
+      WHERE id = ?
+    `, [
+      exitDetails.exitFee     || 0,
+      exitDetails.fundingFee  || 0,
+      exitDetails.netCostFees || 0,
+      exitDetails.netCostFees || 0,
+      id,
+    ], err => err ? reject(err) : resolve());
+  });
+}
+
+module.exports = {
+  initManualTrades, openTrade, closeTrade,
+  getOpenTrades, getAllManualTrades, getTradeById, getTradeStats,
+  migrateBingXColumns, attachBingXDetails, attachCloseDetails,
+};

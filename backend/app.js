@@ -14,7 +14,7 @@ const helmet  = require("helmet");
 const path    = require("path");
 
 const { initDB }           = require("./src/db/init");
-const { initManualTrades } = require("./src/db/manualTradeRepository");  // NEW
+const { initManualTrades, migrateBingXColumns } = require("./src/db/manualTradeRepository");  // NEW
 const { createServer }     = require("./src/api/server");
 const { startEngine }      = require("./src/engines/live/EngineOrchestrator");
 const { setBroadcaster }   = require("./src/engines/live/SignalRouter");
@@ -35,6 +35,8 @@ async function main() {
 
   // 1. Init database
   initDB();
+  initManualTrades();
+  migrateBingXColumns(); // adds BingX columns to existing DB safely
 
   // 2. Express app
   const app = express();

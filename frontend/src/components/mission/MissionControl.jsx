@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import TradeJournal from "../trade/TradeJournal";
+import TradeEntryModal from "../trade/TradeEntryModal";
 import { useStore } from "../../store/useStore";
 
 // ── Session Intelligence (UTC+2 Botswana time) ────────────────────────────────
@@ -123,50 +125,46 @@ function SessionBar() {
 
 // ── Daily Discipline ──────────────────────────────────────────────────────────
 function DailyDiscipline() {
-  const today = new Date().toDateString();
-  const [trades,  setTrades]  = useState(()=>JSON.parse(localStorage.getItem("mc_trades")||"[]").filter(t=>t.date===today));
-  const [showAdd, setShowAdd] = useState(false);
-  const [form,    setForm]    = useState({symbol:"BTCUSDT",direction:"LONG",result:"WIN",rMultiple:"1.5"});
+  const [trades,  setTrades]  = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const MAX=3, TARGET=0.20, STOP=-0.20;
-  const pnl     = trades.reduce((s,t)=>s+t.rMultiple,0);
-  const blocked = trades.length>=MAX || pnl<=STOP || pnl>=TARGET;
-  const wins    = trades.filter(t=>t.rMultiple>0).length;
-  const losses  = trades.filter(t=>t.rMultiple<=0).length;
+  async function load() {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/trades?limit=200");
+      const j = await r.json();
+      if (j.ok) {
+        const todayTs = new Date(); todayTs.setHours(0,0,0,0);
+        setTrades((j.data||[]).filter(t => t.opened_at >= todayTs.getTime()));
+      }
+    } catch(e) {}
+    setLoading(false);
+  }
+  useEffect(() => { load(); }, []);
+
+  const MAX=3, TARGET_USD=50, STOP_USD=-50;
+  const closed  = trades.filter(t=>t.status==="CLOSED");
+  const open    = trades.filter(t=>t.status==="OPEN");
+  const pnl     = closed.reduce((s,t)=>s+(t.pnl_usdt||0),0);
+  const wins    = closed.filter(t=>(t.pnl_usdt||0)>0).length;
+  const losses  = closed.filter(t=>(t.pnl_usdt||0)<=0).length;
+  const blocked = trades.length>=MAX || pnl<=STOP_USD || pnl>=TARGET_USD;
   const pnlCol  = pnl>=0?"#22c55e":"#ef4444";
-
-  // pnl history for sparkline
-  const pnlHist = trades.reduce((acc,t)=>[...acc,(acc[acc.length-1]||0)+t.rMultiple],[0]);
-
-  function save() {
-    const rm=parseFloat(form.rMultiple)*(form.result==="WIN"?1:-1);
-    const updated=[...trades,{...form,rMultiple:rm,date:today,time:new Date().toLocaleTimeString()}];
-    setTrades(updated);
-    const all=JSON.parse(localStorage.getItem("mc_trades")||"[]").filter(t=>t.date!==today);
-    localStorage.setItem("mc_trades",JSON.stringify([...all,...updated]));
-    setShowAdd(false);
-  }
-  function reset(){
-    setTrades([]);
-    const all=JSON.parse(localStorage.getItem("mc_trades")||"[]").filter(t=>t.date!==today);
-    localStorage.setItem("mc_trades",JSON.stringify(all));
-  }
+  const pnlHist = closed.reduce((acc,t)=>[...acc,(acc[acc.length-1]||0)+(t.pnl_usdt||0)],[0]);
 
   return (
     <div className="signal-card p-3">
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-bold text-muted uppercase tracking-widest">📋 Daily Discipline</span>
-        <button onClick={reset} className="text-xs text-muted hover:text-red-400 border border-border rounded px-2 py-0.5">↺ Reset</button>
+        <button onClick={load} className="text-xs text-muted hover:text-bright border border-border rounded px-2 py-0.5">↺</button>
       </div>
 
-      {/* Metrics */}
       <div className="grid grid-cols-4 gap-2 mb-3">
         {[
-          {label:"Trades",value:`${trades.length}/${MAX}`,color:trades.length>=MAX?"#ef4444":"#f9fafb"},
-          {label:"P&L",   value:`${pnl>=0?"+":""}${pnl.toFixed(2)}R`,color:pnlCol},
-          {label:"W/L",   value:`${wins}/${losses}`,color:wins>losses?"#22c55e":losses>wins?"#ef4444":"#f59e0b"},
-          {label:"Status",value:pnl>=TARGET?"HIT":pnl<=STOP?"STOP":blocked&&trades.length>=MAX?"MAX":"ON",
-           color:pnl>=TARGET?"#22c55e":pnl<=STOP?"#ef4444":"#f59e0b"},
+          {label:"Trades", value:`${trades.length}/${MAX}`, color:trades.length>=MAX?"#ef4444":"#f9fafb"},
+          {label:"P&L",    value:`${pnl>=0?"+":""}$${pnl.toFixed(2)}`, color:pnlCol},
+          {label:"W / L",  value:`${wins} / ${losses}`, color:wins>losses?"#22c55e":losses>wins?"#ef4444":"#f59e0b"},
+          {label:"Open",   value:open.length, color:"#60a5fa"},
         ].map(m=>(
           <div key={m.label} className="bg-border/30 rounded p-2 text-center">
             <div className="text-base font-extrabold font-mono" style={{color:m.color}}>{m.value}</div>
@@ -175,73 +173,40 @@ function DailyDiscipline() {
         ))}
       </div>
 
-      {/* P&L sparkline */}
-      {pnlHist.length>1 && (
+      {pnlHist.length>1&&(
         <div className="mb-3 p-2 bg-border/20 rounded">
           <div className="flex justify-between text-xs text-muted mb-1">
-            <span>Stop {STOP}R</span><span>Today's curve</span><span>Target +{TARGET}R</span>
+            <span>Stop -${Math.abs(STOP_USD)}</span><span>Today's P&L</span><span>Target +${TARGET_USD}</span>
           </div>
           <Sparkline data={pnlHist} color={pnlCol} height={28}/>
         </div>
       )}
 
-      {/* Blocked banner */}
-      {blocked && (
+      {blocked&&(
         <div className="mb-3 p-2 rounded text-center text-xs font-bold"
           style={{background:"rgba(239,68,68,0.08)",border:"1px solid #ef444433",color:"#ef4444"}}>
-          🛑 {trades.length>=MAX?"MAX 3 TRADES":pnl<=STOP?"DAILY STOP HIT":"DAILY TARGET HIT"} — DONE FOR TODAY
+          🛑 {trades.length>=MAX?"MAX 3 TRADES":pnl<=STOP_USD?"DAILY STOP HIT":"DAILY TARGET HIT"} — DONE FOR TODAY
         </div>
       )}
 
-      {/* Trade log */}
-      {trades.length>0 && (
-        <div className="space-y-1 mb-3">
-          {trades.map((t,i)=>(
+      {closed.length>0&&(
+        <div className="space-y-1">
+          {closed.slice(-3).map((t,i)=>(
             <div key={i} className="flex items-center justify-between text-xs bg-border/20 rounded px-2 py-1.5">
-              <span className="font-bold text-bright w-16">{t.symbol?.replace("USDT","")}</span>
+              <span className="font-bold text-bright w-14">{t.signal_asset?.replace("USDT","")}</span>
               <span style={{color:t.direction==="LONG"?"#22c55e":"#ef4444"}} className="font-bold w-10">{t.direction}</span>
-              <span style={{color:t.rMultiple>0?"#22c55e":"#ef4444"}} className="font-bold w-14 text-right">
-                {t.rMultiple>0?"+":""}{t.rMultiple.toFixed(1)}R
+              <span className="text-muted w-16 text-center">${parseFloat(t.amount_usdt||0).toFixed(0)} ×{t.leverage}</span>
+              <span style={{color:(t.pnl_usdt||0)>=0?"#22c55e":"#ef4444"}} className="font-bold w-16 text-right">
+                {(t.pnl_usdt||0)>=0?"+":""} ${Math.abs(t.pnl_usdt||0).toFixed(2)}
               </span>
-              <span className="text-muted w-16 text-right">{t.time}</span>
             </div>
           ))}
         </div>
       )}
-
-      {!blocked && !showAdd && (
-        <button onClick={()=>setShowAdd(true)}
-          className="w-full py-1.5 rounded text-xs font-bold border border-accent/40 text-accent hover:bg-accent/10 transition-colors">
-          + Log Trade
-        </button>
-      )}
-      {showAdd && (
-        <div className="space-y-2 border border-border rounded p-3">
-          <div className="grid grid-cols-2 gap-2">
-            <select value={form.symbol} onChange={e=>setForm(f=>({...f,symbol:e.target.value}))}
-              className="bg-border/50 rounded px-2 py-1 text-xs text-bright border border-border">
-              {["BTCUSDT","ETHUSDT","SOLUSDT","AVAXUSDT","LINKUSDT","ARBUSDT"].map(s=><option key={s}>{s}</option>)}
-            </select>
-            <select value={form.direction} onChange={e=>setForm(f=>({...f,direction:e.target.value}))}
-              className="bg-border/50 rounded px-2 py-1 text-xs text-bright border border-border">
-              <option>LONG</option><option>SHORT</option>
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <select value={form.result} onChange={e=>setForm(f=>({...f,result:e.target.value}))}
-              className="bg-border/50 rounded px-2 py-1 text-xs text-bright border border-border">
-              <option>WIN</option><option>LOSS</option>
-            </select>
-            <input value={form.rMultiple} onChange={e=>setForm(f=>({...f,rMultiple:e.target.value}))}
-              type="number" step="0.1" placeholder="R multiple e.g. 1.5"
-              className="bg-border/50 rounded px-2 py-1 text-xs text-bright border border-border"/>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={save} className="flex-1 py-1.5 rounded text-xs font-bold bg-accent text-black">Save</button>
-            <button onClick={()=>setShowAdd(false)} className="flex-1 py-1.5 rounded text-xs font-bold border border-border text-muted">Cancel</button>
-          </div>
-        </div>
-      )}
+      {loading&&<div className="text-xs text-center text-muted mt-2">Loading...</div>}
+      <div className="text-xs text-muted text-center mt-2" style={{fontSize:9}}>
+        All trades saved to SQLite · Max {MAX}/day · Target +${TARGET_USD} · Stop -${Math.abs(STOP_USD)}
+      </div>
     </div>
   );
 }
@@ -574,8 +539,11 @@ function OpportunityRadar({ signals }) {
 }
 
 // ── Root component ────────────────────────────────────────────────────────────
+// ── Root component ────────────────────────────────────────────────────────────
 export default function MissionControl() {
   const { signals } = useStore();
+  const [showEntry, setShowEntry] = useState(false);
+
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -590,6 +558,28 @@ export default function MissionControl() {
         <OpportunityRadar signals={signals}/>
         <CapitalAllocation/>
       </div>
+
+      {/* Trade Journal — full width */}
+      <div className="signal-card p-3">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs font-bold text-muted uppercase tracking-widest">📒 Trade Journal</span>
+          <button
+            onClick={() => setShowEntry(true)}
+            className="text-xs px-3 py-1.5 rounded font-bold border transition-colors"
+            style={{background:"rgba(34,197,94,0.1)",borderColor:"#22c55e66",color:"#22c55e"}}>
+            + Open Trade Manually
+          </button>
+        </div>
+        <TradeJournal />
+      </div>
+
+      {showEntry && (
+        <TradeEntryModal
+          signal={null}
+          onClose={() => setShowEntry(false)}
+          onSaved={() => setShowEntry(false)}
+        />
+      )}
     </div>
   );
 }

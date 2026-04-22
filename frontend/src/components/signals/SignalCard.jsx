@@ -1,4 +1,3 @@
-// SignalCard.jsx - with "Enter Trade" button on TRADE/WATCH signals
 import React, { useState } from "react";
 import RegimeBadge from "../market/RegimeBadge";
 import ConfluenceScore from "./ConfluenceScore";
@@ -9,21 +8,18 @@ function directionColor(dir) {
   if (dir === "SHORT") return "text-red-400";
   return "text-muted";
 }
-
 function actionBadge(action) {
   if (action === "TRADE") return "bg-green-500/20 text-green-300 border border-green-500/40";
   if (action === "WATCH") return "bg-yellow-500/20 text-yellow-300 border border-yellow-500/40";
   return "bg-gray-500/20 text-gray-400";
 }
-
 function fmt(val, d = 4) {
   if (!val) return "—";
   return parseFloat(val).toFixed(d);
 }
 
 export default function SignalCard({ signal, highlight = false }) {
-  const [showTradeModal, setShowTradeModal] = useState(false);
-
+  const [showModal, setShowModal] = useState(false);
   if (!signal) return null;
 
   const asset     = signal.asset   || signal.symbol;
@@ -34,8 +30,20 @@ export default function SignalCard({ signal, highlight = false }) {
   const entry     = signal.entry   || signal.signal?.tradePlan?.entry;
   const sl        = signal.sl      || signal.signal?.tradePlan?.stopLoss;
   const tp        = signal.tp      || signal.signal?.tradePlan?.takeProfit;
+  const rr        = signal.signal?.tradePlan?.riskReward;
 
-  const canEnter = (action === "TRADE" || action === "WATCH") && direction;
+  // Build signal object for the modal
+  const modalSignal = {
+    asset, direction, score, regime,
+    entry, sl, tp,
+    stopHunt:  signal.stopHunt,
+    absorption: signal.absorption || signal.context?.absorption,
+    orderflow: signal.orderflow  || signal.context?.orderflow,
+    signal: signal.signal,
+    context: signal.context,
+  };
+
+  const canTrade = action === "TRADE" || action === "WATCH";
 
   return (
     <>
@@ -54,12 +62,12 @@ export default function SignalCard({ signal, highlight = false }) {
         {/* Direction + Score */}
         <div className="flex items-center justify-between mb-3">
           <span className={`text-lg font-extrabold ${directionColor(direction)}`}>
-            {direction ? `▶ ${direction}` : "—"}
+            {direction ? `${direction === "LONG" ? "▲" : "▼"} ${direction}` : "—"}
           </span>
           <ConfluenceScore score={score} />
         </div>
 
-        {/* Trade Plan */}
+        {/* Trade plan */}
         {entry && (
           <div className="grid grid-cols-3 gap-2 text-xs mt-2 pt-2 border-t border-border">
             <div>
@@ -76,47 +84,45 @@ export default function SignalCard({ signal, highlight = false }) {
             </div>
           </div>
         )}
+        {rr && (
+          <div className="mt-1 text-xs text-muted">
+            R:R <span className="font-bold" style={{color:rr>=2?"#22c55e":rr>=1.5?"#f59e0b":"#ef4444"}}>{rr}:1</span>
+          </div>
+        )}
 
         {/* Context tags */}
         <div className="flex gap-1 flex-wrap mt-2">
-          {signal.stopHunt  && <Tag label="💧 Sweep"      color="blue"   />}
-          {signal.absorption?.absorption && <Tag label="🧲 Absorbed" color="purple" />}
-          {signal.orderflow?.bias === "BUYERS_IN_CONTROL"  && <Tag label="⬆ Buy Flow"  color="green" />}
-          {signal.orderflow?.bias === "SELLERS_IN_CONTROL" && <Tag label="⬇ Sell Flow" color="red"   />}
+          {signal.stopHunt && <Tag label="💧 Sweep" color="blue" />}
+          {(signal.absorption?.absorption || signal.context?.absorption?.absorption) && <Tag label="🧲 Absorbed" color="purple" />}
+          {(signal.orderflow?.bias || signal.context?.orderflow?.bias) === "BUYERS_IN_CONTROL"  && <Tag label="⬆ Buy Flow"  color="green" />}
+          {(signal.orderflow?.bias || signal.context?.orderflow?.bias) === "SELLERS_IN_CONTROL" && <Tag label="⬇ Sell Flow" color="red"   />}
         </div>
 
         <div className="flex items-center justify-between mt-3">
           <div className="text-xs text-muted">
             {signal.timestamp ? new Date(signal.timestamp).toLocaleTimeString() : ""}
           </div>
-
-          {/* Enter Trade button */}
-          {canEnter && (
+          {/* Enter Trade button — shown for TRADE and WATCH signals */}
+          {canTrade && (
             <button
-              onClick={() => setShowTradeModal(true)}
+              onClick={() => setShowModal(true)}
+              className="text-xs px-3 py-1.5 rounded font-bold transition-colors border"
               style={{
-                padding: "5px 14px",
-                borderRadius: 6,
-                border: "none",
-                fontWeight: 700,
-                fontSize: 12,
-                cursor: "pointer",
-                background: direction === "LONG" ? "#15803d" : "#b91c1c",
-                color: "#fff",
-                letterSpacing: "0.03em",
-              }}
-            >
+                background: direction === "LONG" ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+                borderColor: direction === "LONG" ? "#22c55e66" : "#ef444466",
+                color: direction === "LONG" ? "#22c55e" : "#ef4444",
+              }}>
               {direction === "LONG" ? "▲" : "▼"} Enter Trade
             </button>
           )}
         </div>
       </div>
 
-      {showTradeModal && (
+      {showModal && (
         <TradeEntryModal
-          signal={signal}
-          onClose={() => setShowTradeModal(false)}
-          onSaved={() => setShowTradeModal(false)}
+          signal={modalSignal}
+          onClose={() => setShowModal(false)}
+          onSaved={() => setShowModal(false)}
         />
       )}
     </>

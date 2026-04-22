@@ -56,6 +56,8 @@ export default function TradeEntryModal({ signal = null, onClose, onSaved }) {
   const [loadingCtx,  setLoadingCtx]  = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState(null);
+  const [executeBingX,setExecuteBingX] = useState(false);
+  const [bingxResult, setBingxResult] = useState(null); // result after submit
 
   // ── Fetch current price + SL suggestion if manual ────────────────────────
   useEffect(() => {
@@ -119,9 +121,15 @@ export default function TradeEntryModal({ signal = null, onClose, onSaved }) {
   const slPct = ep > 0 && sl > 0 ? Math.abs((sl - ep) / ep * 100) : 0;
   const tpPct = ep > 0 && tp > 0 ? Math.abs((tp - ep) / ep * 100) : 0;
 
+  // ── Fee estimates ────────────────────────────────────────────────────────
+  const BINGX_TAKER_FEE = 0.00075; // 0.075%
+  const estimatedFee = positionSize > 0 ? positionSize * BINGX_TAKER_FEE * 2 : 0; // entry + exit
+  const estimatedFunding = positionSize > 0 ? positionSize * 0.0001 : 0; // ~0.01% per 8h
+
   // ── Submit ────────────────────────────────────────────────────────────────
   async function handleSubmit() {
     setError(null);
+    setBingxResult(null);
     if (!entryPrice || !stopLoss || !takeProfit || !amountUsdt) {
       setError("Fill in Entry Price, Amount, Stop Loss, and Take Profit.");
       return;
@@ -147,12 +155,21 @@ export default function TradeEntryModal({ signal = null, onClose, onSaved }) {
           absorption:     prefill.absorption,
           orderflowBias:  prefill.orderflowBias,
           notes,
+          executeBingX,   // pass to backend
         }),
       });
       const j = await res.json();
       if (!j.ok) { setError(j.error); return; }
+      if (j.warning) {
+        // Logged to DB but BingX had an issue — show warning then close
+        setBingxResult({ warning: j.warning });
+        setTimeout(() => { onSaved?.(); onClose(); }, 3000);
+        return;
+      }
+      setBingxResult(j);
       onSaved?.();
-      onClose();
+      // Brief success flash before close
+      setTimeout(() => onClose(), executeBingX && j.bingxExecuted ? 1500 : 300);
     } catch (err) {
       setError("Server error: " + err.message);
     } finally {
@@ -336,6 +353,70 @@ export default function TradeEntryModal({ signal = null, onClose, onSaved }) {
           </div>
         )}
 
+        {/* ── Fee Estimate ─────────────────────────────────────────────── */}
+        {amt > 0 && ep > 0 && (
+          <div style={{ marginBottom:16, padding:"10px 14px", background:"#0a1628", borderRadius:6, border:"1px solid #1e3a5f" }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>
+              Fee Estimate (BingX)
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+              {[
+                { label:"Trading fees (in+out)", value:`~$${estimatedFee.toFixed(4)}`, color:"#f87171" },
+                { label:"Funding fee (est/8h)",  value:`~$${estimatedFunding.toFixed(4)}`, color:"#f59e0b" },
+                { label:"Net after fees",         value:`~$${(potentialProfit - estimatedFee - estimatedFunding).toFixed(4)}`, color: potentialProfit - estimatedFee - estimatedFunding >= 0 ? "#4ade80" : "#f87171" },
+              ].map(f => (
+                <div key={f.label} style={{ textAlign:"center" }}>
+                  <div style={{ fontSize:10, color:"#64748b", marginBottom:3 }}>{f.label}</div>
+                  <div style={{ fontSize:13, fontWeight:700, fontFamily:"monospace", color:f.color }}>{f.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── BingX Execution Toggle ──────────────────────────────────────── */}
+        <div style={{ marginBottom:18, padding:"12px 16px", background: executeBingX ? "rgba(21,128,61,0.12)" : "#0f172a", border:`1px solid ${executeBingX ? "#16a34a" : "#1e293b"}`, borderRadius:8, transition:"all 0.2s" }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+            <div>
+              <div style={{ fontSize:14, fontWeight:700, color: executeBingX ? "#4ade80" : "#94a3b8" }}>
+                {executeBingX ? "⚡ LIVE — Will execute on BingX" : "📋 Paper Mode — Log only, no real order"}
+              </div>
+              <div style={{ fontSize:11, color:"#475569", marginTop:3 }}>
+                {executeBingX
+                  ? "Real money trade. SL and TP will be placed automatically."
+                  : "Safe — records trade in your journal without placing any order."}
+              </div>
+            </div>
+            <button
+              onClick={() => setExecuteBingX(v => !v)}
+              style={{
+                padding:"8px 18px", borderRadius:6, border:"none", fontWeight:700, fontSize:13,
+                cursor:"pointer", transition:"all 0.2s", flexShrink:0, marginLeft:16,
+                background: executeBingX ? "#15803d" : "#1e293b",
+                color:      executeBingX ? "#fff"    : "#64748b",
+              }}>
+              {executeBingX ? "BingX: ON" : "BingX: OFF"}
+            </button>
+          </div>
+          {executeBingX && (
+            <div style={{ marginTop:8, fontSize:11, color:"#f59e0b", padding:"6px 10px", background:"rgba(245,158,11,0.08)", borderRadius:4, border:"1px solid rgba(245,158,11,0.2)" }}>
+              ⚠ Ensure BINGX_API_KEY and BINGX_SECRET are set in your .env file. Trade will execute immediately at market price.
+            </div>
+          )}
+        </div>
+
+        {/* BingX result flash */}
+        {bingxResult && !bingxResult.warning && bingxResult.bingxExecuted && (
+          <div style={{ marginBottom:16, padding:"10px 14px", background:"rgba(21,128,61,0.12)", border:"1px solid #16a34a", borderRadius:6, fontSize:12, color:"#4ade80" }}>
+            ✅ BingX order placed! Order ID: {bingxResult.bingxOrderId} | SL & TP attached automatically
+          </div>
+        )}
+        {bingxResult?.warning && (
+          <div style={{ marginBottom:16, padding:"10px 14px", background:"rgba(245,158,11,0.08)", border:"1px solid rgba(245,158,11,0.3)", borderRadius:6, fontSize:12, color:"#f59e0b" }}>
+            ⚠ {bingxResult.warning}
+          </div>
+        )}
+
         {/* Notes */}
         <div style={S.section}>
           <label style={S.label}>Notes (optional)</label>
@@ -362,7 +443,11 @@ export default function TradeEntryModal({ signal = null, onClose, onSaved }) {
               color: "#fff",
               opacity: saving ? 0.6 : 1,
             }}>
-            {saving ? "Saving..." : `${direction === "LONG" ? "▲" : "▼"} Enter ${direction} Trade`}
+            {saving
+              ? (executeBingX ? "Placing BingX order..." : "Saving...")
+              : executeBingX
+              ? `⚡ ${direction === "LONG" ? "▲" : "▼"} Execute ${direction} on BingX`
+              : `📋 ${direction === "LONG" ? "▲" : "▼"} Log ${direction} Trade`}
           </button>
         </div>
 
