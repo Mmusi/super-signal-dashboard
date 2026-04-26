@@ -1,4 +1,4 @@
-import BSLStrategy from "./BSLStrategy";
+import CandlestickAlignment from "./CandlestickAlignment";
 import MTFStrategy from "./MTFStrategy";
 import React, { useState, useRef, useEffect } from "react";
 import { useStore } from "../../store/useStore";
@@ -105,6 +105,175 @@ function TradePlan({ entry, sl, tp, direction, note }) {
   );
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// STRATEGY 2 — BSL "One Setup For Life"
+// ══════════════════════════════════════════════════════════════════════════════
+function BSLStrategy({ signals }) {
+  const [sym, setSym] = useState("BTCUSDT");
+  const sig      = signals.find(s => (s.asset || s.symbol) === sym);
+  const stopHunt = sig?.context?.stopHunt || sig?.stopHunt;
+  const score    = sig?.signal?.score || sig?.score || 0;
+  const plan     = sig?.signal?.tradePlan;
+
+  // ICT Macro windows in UTC+2 (Botswana)
+  const now     = new Date();
+  const utc2H   = (now.getUTCHours() + 2) % 24;
+  const utc2M   = now.getUTCMinutes();
+  const decimal = utc2H + utc2M / 60;
+
+  const macros = [
+    { label: "AM Macro 1", start: 9.83,  end: 10.17, desc: "9:50–10:10 UTC+2" },
+    { label: "AM Macro 2", start: 10.83, end: 11.17, desc: "10:50–11:10 UTC+2" },
+    { label: "PM Macro 1", start: 15.33, end: 15.67, desc: "15:20–15:40 UTC+2" },
+    { label: "PM Macro 2", start: 16.83, end: 17.17, desc: "16:50–17:10 UTC+2" },
+  ];
+  const activeMacro = macros.find(m => decimal >= m.start && decimal <= m.end);
+  const nextMacro   = macros.find(m => m.start > decimal);
+
+  const checklist = [
+    { label: "Macro time window active", done: !!activeMacro, tip: "BSL model is ONLY valid during these specific 20-minute windows. Trading outside = random entries." },
+    { label: "Price at Premium/Discount PD Array", done: score >= 60, tip: "For BUY: price must reach discount zone. For SELL: price must hit premium zone. Mid-range = skip." },
+    { label: "Stop Hunt / Liquidity Sweep confirmed", done: !!stopHunt, tip: "Price sweeps below a key level (grabs buy-side stops), then reverses. This is the trigger event." },
+    { label: "IFVG or Breaker Block identified", done: stopHunt || score >= 75, tip: "Inversion FVG: a gap that price 'fills' and then uses as support. Breaker: old support broken, now resistance." },
+    { label: "1:2 Risk:Reward achievable", done: (plan?.riskReward || 0) >= 2, tip: "BSL model targets 1:2 minimum. If TP is not 2× the SL distance away, skip the trade." },
+  ];
+
+  const allGreen = checklist.every(c => c.done);
+
+  return (
+    <div style={{ color: "#e2e8f0" }}>
+      <div style={{ marginBottom: 16 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>🏆 BSL — One Setup For Life</h2>
+        <p style={{ fontSize: 11, color: "#64748b", margin: "4px 0 0" }}>
+          Macro timing + Premium/Discount + Stop Hunt + IFVG/Breaker = 1:2 RR minimum
+          <Tip text="The BSL model focuses on 1–2 high-quality trades per day, only during specific ICT macro time windows when institutional order flow is most active.">
+            <span style={{ marginLeft: 6, cursor: "help", color: "#3b82f6" }}>ⓘ</span>
+          </Tip>
+        </p>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div>
+          {/* Macro clock */}
+          <div style={{
+            background: activeMacro ? "rgba(34,197,94,0.08)" : "#0f172a",
+            border: `1px solid ${activeMacro ? "#22c55e44" : "#1e293b"}`,
+            borderRadius: 8, padding: 14, marginBottom: 12,
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", marginBottom: 8 }}>
+              ⏰ ICT Macro Windows (UTC+2)
+            </div>
+            {macros.map(m => {
+              const isActive = decimal >= m.start && decimal <= m.end;
+              const isPast   = decimal > m.end;
+              return (
+                <div key={m.label} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "6px 8px", borderRadius: 4, marginBottom: 4,
+                  background: isActive ? "rgba(34,197,94,0.12)" : isPast ? "rgba(255,255,255,0.02)" : "transparent",
+                  border: isActive ? "1px solid #22c55e44" : "1px solid transparent",
+                }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: isActive ? "#4ade80" : isPast ? "#334155" : "#94a3b8" }}>
+                      {isActive ? "🟢 " : isPast ? "✓ " : "○ "}{m.label}
+                    </div>
+                    <div style={{ fontSize: 9, color: "#475569" }}>{m.desc}</div>
+                  </div>
+                  {isActive && <Badge label="ACTIVE NOW" color="#22c55e" />}
+                  {!isActive && !isPast && m === nextMacro && <Badge label="NEXT" color="#f59e0b" />}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Checklist */}
+          <div style={{ background: "#0f172a", borderRadius: 8, padding: 14 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", marginBottom: 10 }}>
+              Setup Checklist — {sym.replace("USDT","")}
+            </div>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
+              {["BTCUSDT","ETHUSDT","SOLUSDT","AVAXUSDT","LINKUSDT","ARBUSDT"].map(s => (
+                <button key={s} onClick={() => setSym(s)} style={{
+                  padding: "2px 7px", borderRadius: 4, border: "none", fontWeight: 700, fontSize: 9, cursor: "pointer",
+                  background: sym === s ? "#22c55e" : "#1e293b", color: sym === s ? "#000" : "#64748b",
+                }}>{s.replace("USDT", "")}</button>
+              ))}
+            </div>
+            {checklist.map((c, i) => <Check key={i} done={c.done} label={c.label} tip={c.tip} />)}
+          </div>
+        </div>
+
+        <div>
+          {/* Entry model diagram */}
+          <div style={{ background: "#0f172a", borderRadius: 8, padding: 14, marginBottom: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", marginBottom: 10 }}>
+              Entry Model
+            </div>
+            {[
+              { step: "1st Entry", method: "IFVG", color: "#22c55e", tip: "Inversion Fair Value Gap — price fills the gap and treats it as new support/resistance." },
+              { step: "2nd Entry", method: "Breaker Block", color: "#3b82f6", tip: "Old support broken, comes back to retest as resistance. More conservative entry." },
+            ].map(e => (
+              <Tip key={e.step} text={e.tip}>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 10px", borderRadius: 6, marginBottom: 6, cursor: "help",
+                  background: `${e.color}10`, border: `1px solid ${e.color}33`,
+                }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#475569" }}>{e.step}:</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: e.color }}>{e.method}</span>
+                </div>
+              </Tip>
+            ))}
+
+            <div style={{ marginTop: 12, padding: "10px 12px", background: "#111827", borderRadius: 6 }}>
+              <div style={{ fontSize: 10, color: "#475569", marginBottom: 6 }}>Key rules:</div>
+              {[
+                { text: "Candle closes below IFVG low → enter on 2nd candle open", tip: "Don't enter on the same candle. Wait for the next candle to open and confirm direction." },
+                { text: "Focus on 1–2 high quality setups per day only", tip: "Overtrading kills accounts. The market does not pay the fastest trader — it pays the patient one." },
+                { text: "Minimum 1:2 risk:reward always", tip: "If you win 50% of trades at 1:2 RR, you're profitable. Math works in your favour." },
+              ].map((r, i) => (
+                <Tip key={i} text={r.tip}>
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 5, cursor: "help", display: "flex", gap: 6 }}>
+                    <span style={{ color: "#f59e0b", flexShrink: 0 }}>→</span>
+                    <span style={{ borderBottom: "1px dashed #334155" }}>{r.text}</span>
+                  </div>
+                </Tip>
+              ))}
+            </div>
+          </div>
+
+          {/* Signal status */}
+          <div style={{
+            padding: "14px 16px", borderRadius: 8, textAlign: "center",
+            background: allGreen ? "rgba(34,197,94,0.08)" : "rgba(245,158,11,0.05)",
+            border: `1px solid ${allGreen ? "#22c55e44" : "#1e293b"}`,
+          }}>
+            <div style={{ fontSize: 20, marginBottom: 6 }}>{allGreen ? "🎯" : activeMacro ? "⏳" : "🚫"}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: allGreen ? "#4ade80" : activeMacro ? "#f59e0b" : "#ef4444" }}>
+              {allGreen ? "ALL CONDITIONS MET — TRADE READY" : activeMacro ? "Macro active — waiting for setup" : "Outside macro window — wait"}
+            </div>
+            {nextMacro && !activeMacro && (
+              <div style={{ fontSize: 10, color: "#475569", marginTop: 4 }}>
+                Next window: {nextMacro.desc}
+              </div>
+            )}
+          </div>
+
+          {plan && allGreen && (
+            <TradePlan
+              entry={plan.entry?.toFixed(2)}
+              sl={plan.stopLoss?.toFixed(2)}
+              tp={plan.takeProfit?.toFixed(2)}
+              note="BSL entry: SL below stop hunt low. TP at next PD array / key level."
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // STRATEGY 3 — 10 EMA Trend Strategy
 // ══════════════════════════════════════════════════════════════════════════════
 function EMAStrategy({ signals }) {
@@ -382,10 +551,11 @@ function MasterChecklist({ signals }) {
 // Root StrategiesTab
 // ══════════════════════════════════════════════════════════════════════════════
 const STRAT_TABS = [
-  { label: "📊 MTF Entry",       icon: "📊" },
-  { label: "🏆 BSL Setup",       icon: "🏆" },
-  { label: "📈 10 EMA",          icon: "📈" },
-  { label: "🎯 Master Checklist",icon: "🎯" },
+  { label: "📊 MTF Entry",          icon: "📊" },
+  { label: "🏆 BSL Setup",          icon: "🏆" },
+  { label: "📈 10 EMA",             icon: "📈" },
+  { label: "🎯 Master Checklist",   icon: "🎯" },
+  { label: "🧠 Market State",       icon: "🧠" },
 ];
 
 export default function StrategiesTab() {
@@ -411,6 +581,7 @@ export default function StrategiesTab() {
       {active === 1 && <BSLStrategy signals={signals} />}
       {active === 2 && <EMAStrategy signals={signals} />}
       {active === 3 && <MasterChecklist signals={signals} />}
+      {active === 4 && <CandlestickAlignment signals={signals} />}
     </div>
   );
 }
