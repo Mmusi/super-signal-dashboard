@@ -23,7 +23,8 @@ export const useStore = create((set, get) => ({
 
   // Control
   killSwitch:   false,
-  mode:         "PAPER",
+  mode:          "PAPER",
+  bingxStatus:   null,  // { configured, ping, balance }
 
   // Alerts
   alerts:       [],
@@ -40,6 +41,8 @@ export const useStore = create((set, get) => ({
       // Hydrate signals and heatmap immediately via REST
       get().loadSignals();
       get().loadHeatmap("BTCUSDT");
+      get().loadMode();
+      get().loadBingXStatus();
     };
 
     ws.onclose = () => {
@@ -104,6 +107,22 @@ export const useStore = create((set, get) => ({
     } catch (e) {
       console.warn("loadSignals failed:", e);
     }
+  },
+
+  async loadMode() {
+    try {
+      const r = await fetch("/api/control/status");
+      const j = await r.json();
+      if (j.ok) set({ mode: j.mode });
+    } catch(e) { console.warn("loadMode failed:", e); }
+  },
+
+  async loadBingXStatus() {
+    try {
+      const r = await fetch("/api/trades/bingx-status");
+      const j = await r.json();
+      if (j.ok) set({ bingxStatus: j });
+    } catch(e) { console.warn("loadBingXStatus failed:", e); }
   },
 
   async loadHeatmap(symbol = "BTCUSDT") {

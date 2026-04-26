@@ -3,6 +3,7 @@
 //   1. System generates TRADE signal → user clicks "Enter Trade"
 //   2. User manually clicks "Open Trade" from dashboard
 // Computes P&L preview live, saves to SQLite via /api/trades/open
+import { useStore } from "../../store/useStore";
 import React, { useState, useEffect, useCallback } from "react";
 
 const LEVERAGES = [1, 2, 3, 5, 10, 15, 20, 25];
@@ -56,7 +57,11 @@ export default function TradeEntryModal({ signal = null, onClose, onSaved }) {
   const [loadingCtx,  setLoadingCtx]  = useState(false);
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState(null);
-  const [executeBingX,setExecuteBingX] = useState(false);
+  const { mode: systemMode, bingxStatus } = useStore();
+  // Auto-enable BingX when system is in LIVE mode with configured keys
+  const [executeBingX,setExecuteBingX] = useState(
+    () => systemMode === "LIVE" && !!(bingxStatus?.configured)
+  );
   const [bingxResult, setBingxResult] = useState(null); // result after submit
 
   // ── Fetch current price + SL suggestion if manual ────────────────────────
@@ -379,7 +384,11 @@ export default function TradeEntryModal({ signal = null, onClose, onSaved }) {
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div>
               <div style={{ fontSize:14, fontWeight:700, color: executeBingX ? "#4ade80" : "#94a3b8" }}>
-                {executeBingX ? "⚡ LIVE — Will execute on BingX" : "📋 Paper Mode — Log only, no real order"}
+                {executeBingX
+                ? "⚡ LIVE — Will execute on BingX"
+                : systemMode === "LIVE"
+                ? "📋 BingX OFF — will log only (toggle to execute)"
+                : `📋 ${systemMode} MODE — switch to LIVE in Control panel for real orders`}
               </div>
               <div style={{ fontSize:11, color:"#475569", marginTop:3 }}>
                 {executeBingX
@@ -398,9 +407,14 @@ export default function TradeEntryModal({ signal = null, onClose, onSaved }) {
               {executeBingX ? "BingX: ON" : "BingX: OFF"}
             </button>
           </div>
-          {executeBingX && (
+          {executeBingX && systemMode !== "LIVE" && (
+            <div style={{ marginTop:8, fontSize:11, color:"#ef4444", padding:"6px 10px", background:"rgba(239,68,68,0.08)", borderRadius:4, border:"1px solid rgba(239,68,68,0.2)" }}>
+              ⚠ System is in {systemMode} mode. Switch to LIVE in Control panel — trade will be logged only.
+            </div>
+          )}
+          {executeBingX && systemMode === "LIVE" && (
             <div style={{ marginTop:8, fontSize:11, color:"#f59e0b", padding:"6px 10px", background:"rgba(245,158,11,0.08)", borderRadius:4, border:"1px solid rgba(245,158,11,0.2)" }}>
-              ⚠ Ensure BINGX_API_KEY and BINGX_SECRET are set in your .env file. Trade will execute immediately at market price.
+              ⚡ LIVE: Order will execute immediately at market price on BingX. Ensure BINGX_API_KEY and BINGX_SECRET are in .env.
             </div>
           )}
         </div>

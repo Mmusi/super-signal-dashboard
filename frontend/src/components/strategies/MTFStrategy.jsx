@@ -564,12 +564,152 @@ function StepChart({ step, candles, sig }) {
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MTF GLOSSARY DATA
+// ─────────────────────────────────────────────────────────────────────────────
+const MTF_GLOSSARY = [
+  {
+    sym:"BSL", full:"Buy-Side Liquidity", color:"#ef4444", icon:"🎯",
+    what:"A cluster of stop-loss orders sitting ABOVE recent swing highs. When traders go short, their stop-loss sits above the last high. Thousands of these orders pile up at the same level, creating a 'liquidity pool' that institutions target.",
+    where:"Red dashed lines drawn ABOVE the current price on the chart. The higher the line, the more stops sit above it.",
+    signal:"When price spikes ABOVE a BSL level then immediately reverses back down — that spike is the 'hunt'. The reversal is your SHORT entry signal. Do NOT chase the spike up. Wait for the close back below the BSL level.",
+    entry:"SHORT: wait for sweep above BSL → reversal candle closes below BSL → enter on the NEXT candle open. SL above the swept high. TP at nearest SSL zone below price.",
+    example:"BTC has a swing high at $79,200. BSL line drawn there. Price pokes to $79,350 (grabs stops), then closes back at $79,050. That close below $79,200 is your short entry. SL at $79,400.",
+  },
+  {
+    sym:"SSL", full:"Sell-Side Liquidity", color:"#22c55e", icon:"🎯",
+    what:"A cluster of stop-loss orders sitting BELOW recent swing lows. Every long position has a stop below the last low. These form the 'sell-side' pool — institutions sweep below to grab this liquidity and fuel their own buying.",
+    where:"Green dashed lines drawn BELOW the current price on the chart. The lower the line, the more buy stops cluster there.",
+    signal:"When price dips BELOW an SSL level then immediately reverses back up — the dip is the hunt, the reversal is your LONG entry. This is the most common setup: false breakdown → strong reversal.",
+    entry:"LONG: wait for sweep below SSL → reversal candle closes back above SSL → enter on NEXT candle open. SL below the swept low. TP at nearest BSL zone above price.",
+    example:"BTC support at $74,800. SSL line drawn there. Price drops to $74,550 (grabs long stops), then closes back at $75,100. That close above $74,800 is your long entry. SL at $74,450.",
+  },
+  {
+    sym:"OB", full:"Order Block", color:"#60a5fa", icon:"📦",
+    what:"The last opposing candle (or last few candles) before a strong impulsive move. For a bullish OB: the last red candle(s) before price shot up strongly. Institutions placed large buy orders here — when price returns, they add more, causing a bounce.",
+    where:"Coloured rectangles on the chart. Blue/teal = bullish OB (buy zone). Red = bearish OB (sell zone). The rectangle covers the full range of that candle (high to low).",
+    signal:"Price returns to an OB zone after a strong move in the opposite direction. Enter in the direction of the original move. The OB is the re-entry zone for institutions.",
+    entry:"LONG: price falls back into bullish OB box → first green candle closing inside or above OB → enter. SL below the OB's low. TP at the last swing high (the move OB launched from).",
+    example:"BTC had a red candle at $75,200–$75,800 then launched to $78,000. Price pulls back to $75,400 (inside the OB rectangle). First green candle at $75,400 = long entry. SL at $75,150.",
+  },
+  {
+    sym:"FVG", full:"Fair Value Gap (Price Imbalance)", color:"#a78bfa", icon:"⬜",
+    what:"A 3-candle pattern where candle 1's high and candle 3's low don't overlap — leaving a 'gap' in price. This gap means buyers and sellers never interacted at those prices. Markets are efficient: they almost always return to fill these gaps.",
+    where:"Purple shaded zone between candle 1's high and candle 3's low. You'll see it as a highlighted band after a strong move.",
+    signal:"After a strong move creates an FVG, wait for price to pull back INTO the gap. That pullback into the FVG is your entry in the direction of the original move. The FVG acts as a magnet.",
+    entry:"LONG: strong bullish move creates FVG → price retraces back into FVG → enter when a candle closes inside FVG or touches the top of it. SL below FVG. TP at next BSL above.",
+    example:"BTC jumps from $76,000 to $77,500. Candle 1 high = $76,400. Candle 3 low = $76,700. FVG = $76,400–$76,700. BTC retraces to $76,550 → that's your long entry in the gap.",
+  },
+  {
+    sym:"POI", full:"Point of Interest", color:"#60a5fa", icon:"📍",
+    what:"Any specific price level or zone where you EXPECT price to react. This includes OBs, FVGs, BSL/SSL levels, round numbers, and previous session highs/lows. POI is the destination you wait for — NOT a random spot to enter.",
+    where:"The blue dashed arrow on the chart points FROM current price TOWARD the nearest POI. The arrow tells you: 'THIS is where price is likely heading before the next move.'",
+    signal:"The arrow shows you which direction to expect a pullback. Do NOT enter AT the arrow. Wait for price to reach the POI AND show a reversal signal (sweep + close back).",
+    entry:"Mark the POI. Set an alert. When price reaches it, switch to a lower timeframe (5M or 15M) and look for the sweep + CHoCH entry pattern. The POI is your patient waiting zone.",
+    example:"BTC at $78,000. Blue arrow points DOWN to $76,500 (bullish OB). You wait. BTC drops to $76,500, sweeps below, closes back above. NOW you enter long — not before.",
+  },
+  {
+    sym:"Premium", full:"Premium Zone (Sell Area)", color:"#ef4444", icon:"🔴",
+    what:"The upper portion of any price range — above the 50% equilibrium. Price is 'expensive' here relative to the range. Institutions SELL in premium zones. If you're buying here, you're buying what institutions are selling TO you.",
+    where:"Red-tinted background on the upper half of the chart. The 50% line divides discount from premium.",
+    signal:"In a DOWNTREND: look for shorts when price rallies back into premium zone. Price has overextended to the upside — institutions will push it back down. In an UPTREND: avoid longs in premium — wait for price to pull back to discount.",
+    entry:"SHORT setups only in premium zone during downtrends. Look for OB or FVG in premium + sweep of BSL above it → short entry.",
+    example:"BTC range $74,000–$80,000. Midpoint = $77,000. BTC rallies to $79,000 (premium zone). In downtrend, look for a bearish OB around $79k → short. Do not buy at $79k.",
+  },
+  {
+    sym:"Discount", full:"Discount Zone (Buy Area)", color:"#22c55e", icon:"🟢",
+    what:"The lower portion of any price range — below the 50% equilibrium. Price is 'cheap' here. Institutions BUY in discount zones. This is where they accumulate positions before pushing price back up into premium.",
+    where:"Green-tinted background on the lower half of the chart. Everything below the 50% midline is discount.",
+    signal:"In an UPTREND: only take LONG entries when price is in the discount zone. Price has pulled back to a 'sale' — institutions are stepping in to buy. Never buy in premium during an uptrend.",
+    entry:"LONG setups only in discount zone during uptrends. Wait for price to pull into discount → find bullish OB or FVG in that zone → wait for sweep of SSL below → long entry.",
+    example:"BTC uptrend. Range $74,000–$80,000. Midpoint $77,000. BTC pulls back to $75,500 (discount zone). Bullish OB at $75,200. SSL sweep at $74,900. Long at $75,000. Stop $74,700.",
+  },
+  {
+    sym:"CHoCH", full:"Change of Character", color:"#22c55e", icon:"↗",
+    what:"The first sign that the market is changing direction. In a downtrend (lower highs), CHoCH is the FIRST higher high. In an uptrend (higher lows), CHoCH is the FIRST lower low. It doesn't confirm the reversal alone — but it's the warning signal.",
+    where:"Shown on the lower timeframe (M5/M15) after a sweep. The first candle that closes above the last swing high (for longs) or below the last swing low (for shorts).",
+    signal:"After a liquidity sweep (⚡), the CHoCH is your confirmation that the reversal is real. Without CHoCH, the sweep could be noise. CHoCH + sweep = high probability setup.",
+    entry:"After SSL sweep → first candle to close above the previous minor high = CHoCH → enter on the NEXT candle open. Don't wait for more — the opportunity is now.",
+    example:"BTC sweeps below $74,800 SSL. Then closes back above $75,100 (previous minor high). That close above $75,100 = CHoCH. Enter long on the next candle at $75,120.",
+  },
+  {
+    sym:"MSS", full:"Market Structure Shift", color:"#60a5fa", icon:"🔀",
+    what:"A stronger, more significant version of CHoCH. Where CHoCH is the first hint, MSS is the confirmation. Price breaks a MAJOR swing high or low — not just a minor one. This signals a true trend reversal or continuation.",
+    where:"The dotted line on the chart connecting the sweep low to the new high. A larger structural break than CHoCH.",
+    signal:"CHoCH gives the early entry. MSS gives the confirmation entry (slightly later but higher confidence). Both in one setup = very strong signal. System score typically jumps above 80 on MSS.",
+    entry:"If you missed the CHoCH entry, MSS gives a second chance. Enter when price breaks the MSS level with conviction. SL below the sweep low. TP at previous major high.",
+    example:"After CHoCH at $75,100, BTC continues up and breaks the major swing high at $76,800. That break of $76,800 = MSS. If you missed the earlier entry, you can enter here with SL at $74,700.",
+  },
+  {
+    sym:"⚡ Sweep", full:"Liquidity Sweep / Stop Hunt", color:"#f59e0b", icon:"⚡",
+    what:"Price briefly exceeds a key level (BSL above or SSL below), grabbing all the stop-loss orders there, then immediately REVERSES. The spike out is the hunt — the reversal is the trade. This is the most important event to wait for.",
+    where:"Yellow ⚡ marker on the chart at the spike candle. Usually a candle with a very long wick that closes back inside the range.",
+    signal:"⚡ on chart = something happened. Now look at the NEXT candle. Did it reverse strongly? If yes → setup is forming. If price continues in the spike direction → not a sweep, real breakout.",
+    entry:"NEVER enter on the sweep candle itself (too risky). Wait for the NEXT candle to close in the OPPOSITE direction. That close = confirmation. Enter on the candle AFTER that.",
+    example:"⚡ marker below $74,800. The sweep candle has a long lower wick closing back at $75,000. Next candle closes green at $75,200. THAT candle's close = your long entry. SL at $74,600.",
+  },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MTF ENTRY GUIDE
+// ─────────────────────────────────────────────────────────────────────────────
+function MTFEntryGuide() {
+  return (
+    <div style={{ background:"#0f172a",borderRadius:10,border:"1px solid #1e293b",padding:16,marginBottom:12 }}>
+      <div style={{ fontSize:11,fontWeight:700,color:"#475569",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12 }}>
+        🤔 When to Enter Manually vs Wait for the Signal
+      </div>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+        <div style={{ background:"rgba(34,197,94,0.06)",borderRadius:8,padding:12,border:"1px solid #22c55e22" }}>
+          <div style={{ fontSize:12,fontWeight:800,color:"#22c55e",marginBottom:8 }}>✅ Wait for system signal when...</div>
+          {[
+            {rule:"Score ≥ 85 (STRONG TRADE)",    why:"Full confluence. All 4 steps aligned. Let the signal fire — it pre-fills entry, SL, TP. Just enter your amount."},
+            {rule:"Score 75–84 (WATCH)",           why:"Valid setup. Can enter manually but use 50% of normal size. System detected real structure but needs one more factor."},
+            {rule:"You feel uncertain",             why:"Uncertainty = no edge. If you're asking 'should I?', the answer is wait. Certainty comes from all steps ticking green."},
+            {rule:"Regime is TRENDING + Sweep seen",why:"These two factors together almost always produce a TRADE signal within 1–3 candles. Be patient — it's coming."},
+            {rule:"Multiple assets showing same signal",why:"When BTC, ETH, SOL all sweep SSL simultaneously, institutional buying is happening. Trust the system."},
+          ].map((x,i)=>(
+            <div key={i} style={{ display:"flex",gap:8,marginBottom:7 }}>
+              <span style={{ color:"#22c55e",flexShrink:0,fontSize:12 }}>✓</span>
+              <div><span style={{ fontSize:11,fontWeight:700,color:"#e2e8f0" }}>{x.rule}: </span>
+              <span style={{ fontSize:11,color:"#94a3b8" }}>{x.why}</span></div>
+            </div>
+          ))}
+        </div>
+        <div style={{ background:"rgba(245,158,11,0.05)",borderRadius:8,padding:12,border:"1px solid #f59e0b22" }}>
+          <div style={{ fontSize:12,fontWeight:800,color:"#f59e0b",marginBottom:8 }}>⚠️ Enter manually (override) only when...</div>
+          {[
+            {rule:"You see ⚡ sweep clearly on chart",  why:"You spotted it yourself on M5 before the system scored it. Use Step 4 override. Keep size small (0.5% max risk)."},
+            {rule:"Score 65–74 + visual confirmation",  why:"Close to threshold. You can see the OB/FVG clearly. Half position size. Be ready to exit fast if it fails."},
+            {rule:"Macro window (BSL model) is active",  why:"9:50–10:10 or 10:50–11:10 UTC+2. These windows are time-critical. System may lag by 1–2 candles."},
+            {rule:"Major round number / HTF level hit",  why:"$75,000, $80,000, $70,000 — these psychological levels attract institutional orders. Trust your eyes here."},
+            {rule:"Testing a setup (paper mode)",       why:"Always use BingX OFF for experiments. Never test with real money."},
+          ].map((x,i)=>(
+            <div key={i} style={{ display:"flex",gap:8,marginBottom:7 }}>
+              <span style={{ color:"#f59e0b",flexShrink:0,fontSize:12 }}>→</span>
+              <div><span style={{ fontSize:11,fontWeight:700,color:"#e2e8f0" }}>{x.rule}: </span>
+              <span style={{ fontSize:11,color:"#94a3b8" }}>{x.why}</span></div>
+            </div>
+          ))}
+          <div style={{ marginTop:10,padding:"6px 10px",background:"rgba(239,68,68,0.08)",borderRadius:5,fontSize:10,color:"#fca5a5" }}>
+            ⚠️ Manual entries carry more risk. Always reduce position size. Set SL before you enter.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MTFStrategy({ signals }) {
   const { candles:allCandles, loadCandles } = useStore();
   const [sym,      setSym]      = useState("BTCUSDT");
   const [step,     setStep]     = useState(0);
   const [showModal,setShowModal]= useState(false);
-  const [override, setOverride] = useState(false);
+  const [override,    setOverride]    = useState(false);
+  const [showGuide,   setShowGuide]   = useState(false);
+  const [showGloss,   setShowGloss]   = useState(false);
+  const [glossSym,    setGlossSym]    = useState(null);
 
   useEffect(()=>{ loadCandles(sym,"1h"); },[sym]);
 
@@ -676,15 +816,94 @@ export default function MTFStrategy({ signals }) {
           <h2 style={{ fontSize:17,fontWeight:800,margin:0 }}>📊 Multi-Timeframe Entry Strategy</h2>
           <p style={{ fontSize:11,color:P.sub,margin:"4px 0 0" }}>HTF Context → H1 Structure → M5 Confirmation → Execute with edge</p>
         </div>
-        <div style={{ display:"flex",gap:4 }}>
-          {SYMS.map(s=>(
-            <button key={s} onClick={()=>setSym(s)} style={{
-              padding:"4px 10px",borderRadius:5,border:"none",fontWeight:700,fontSize:11,cursor:"pointer",
-              background:sym===s?"#22c55e":"#1e293b",color:sym===s?"#000":"#475569",transition:"all 0.2s",
-            }}>{s.replace("USDT","")}</button>
-          ))}
+        <div style={{ display:"flex",gap:6,flexWrap:"wrap",alignItems:"center" }}>
+          <button onClick={()=>setShowGuide(v=>!v)} style={{
+            padding:"4px 10px",borderRadius:5,border:`1px solid ${showGuide?P.amber:P.border}`,
+            background:showGuide?"rgba(245,158,11,0.1)":P.panel,
+            color:showGuide?P.amber:P.text,fontSize:11,fontWeight:700,cursor:"pointer",
+          }}>🤔 When to enter?</button>
+          <button onClick={()=>setShowGloss(v=>!v)} style={{
+            padding:"4px 10px",borderRadius:5,border:`1px solid ${showGloss?P.blue:P.border}`,
+            background:showGloss?"rgba(96,165,250,0.1)":P.panel,
+            color:showGloss?P.blue:P.text,fontSize:11,fontWeight:700,cursor:"pointer",
+          }}>📖 Symbol Guide</button>
+          <div style={{ display:"flex",gap:4 }}>
+            {SYMS.map(s=>(
+              <button key={s} onClick={()=>setSym(s)} style={{
+                padding:"4px 10px",borderRadius:5,border:"none",fontWeight:700,fontSize:11,cursor:"pointer",
+                background:sym===s?"#22c55e":"#1e293b",color:sym===s?"#000":"#475569",transition:"all 0.2s",
+              }}>{s.replace("USDT","")}</button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* ── Entry Guide ─────────────────────────────────────────────────────── */}
+      {showGuide && <MTFEntryGuide/>}
+
+      {/* ── Symbol Glossary ─────────────────────────────────────────────────── */}
+      {showGloss && (
+        <div style={{ background:P.panel,borderRadius:10,border:`1px solid ${P.border}`,marginBottom:12,overflow:"hidden" }}>
+          <div style={{ padding:"10px 14px",borderBottom:`1px solid ${P.border}` }}>
+            <div style={{ fontSize:11,fontWeight:700,color:P.muted,textTransform:"uppercase",letterSpacing:"0.07em" }}>
+              📖 Chart Symbol Guide — click any symbol to learn what it means and when to act
+            </div>
+          </div>
+          {/* Symbol buttons */}
+          <div style={{ padding:"10px 14px",display:"flex",flexWrap:"wrap",gap:6 }}>
+            {MTF_GLOSSARY.map(g=>(
+              <button key={g.sym} onClick={()=>setGlossSym(glossSym===g.sym?null:g.sym)} style={{
+                padding:"4px 10px",borderRadius:5,fontWeight:700,fontSize:11,cursor:"pointer",
+                border:`1px solid ${glossSym===g.sym?g.color:P.border}`,
+                background:glossSym===g.sym?`${g.color}18`:P.bg,
+                color:glossSym===g.sym?g.color:P.text,transition:"all 0.2s",
+              }}>{g.icon} {g.sym}</button>
+            ))}
+          </div>
+          {/* Detail pane */}
+          {glossSym && (() => {
+            const g = MTF_GLOSSARY.find(x=>x.sym===glossSym);
+            if (!g) return null;
+            return (
+              <div style={{ padding:14,borderTop:`1px solid ${P.border}`,background:P.bg }}>
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+                  <div>
+                    <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:10 }}>
+                      <span style={{ fontSize:26 }}>{g.icon}</span>
+                      <div>
+                        <div style={{ fontSize:15,fontWeight:800,color:g.color }}>{g.sym}</div>
+                        <div style={{ fontSize:11,color:P.text }}>{g.full}</div>
+                      </div>
+                    </div>
+                    <div style={{ background:P.panel,borderRadius:7,padding:12,marginBottom:8 }}>
+                      <div style={{ fontSize:10,fontWeight:700,color:P.muted,textTransform:"uppercase",marginBottom:6 }}>What is it?</div>
+                      <div style={{ fontSize:12,color:P.text,lineHeight:1.65 }}>{g.what}</div>
+                    </div>
+                    <div style={{ background:P.panel,borderRadius:7,padding:12 }}>
+                      <div style={{ fontSize:10,fontWeight:700,color:P.muted,textTransform:"uppercase",marginBottom:6 }}>Where on the chart?</div>
+                      <div style={{ fontSize:12,color:P.text,lineHeight:1.65 }}>{g.where}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ background:`${g.color}08`,borderRadius:7,padding:12,border:`1px solid ${g.color}22`,marginBottom:8 }}>
+                      <div style={{ fontSize:10,fontWeight:700,color:g.color,textTransform:"uppercase",marginBottom:6 }}>When to enter / what it signals</div>
+                      <div style={{ fontSize:12,color:P.bright,lineHeight:1.65 }}>{g.signal}</div>
+                    </div>
+                    <div style={{ background:P.panel,borderRadius:7,padding:12,marginBottom:8 }}>
+                      <div style={{ fontSize:10,fontWeight:700,color:P.muted,textTransform:"uppercase",marginBottom:6 }}>Exact entry rule</div>
+                      <div style={{ fontSize:12,color:P.text,lineHeight:1.65 }}>{g.entry}</div>
+                    </div>
+                    <div style={{ background:"rgba(245,158,11,0.06)",borderRadius:7,padding:12,border:"1px solid #f59e0b22" }}>
+                      <div style={{ fontSize:10,fontWeight:700,color:P.amber,textTransform:"uppercase",marginBottom:6 }}>💡 Real BTC example</div>
+                      <div style={{ fontSize:12,color:P.text,lineHeight:1.65,fontStyle:"italic" }}>{g.example}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Step bar */}
       <div style={{ display:"flex",borderRadius:10,overflow:"hidden",border:"1px solid #1e293b",marginBottom:14 }}>

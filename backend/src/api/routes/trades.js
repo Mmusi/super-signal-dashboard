@@ -14,6 +14,7 @@ const { predictTP }  = require("../../engines/tpPredictor");
 const candleBuilder  = require("../../data/binance/candleBuilder");
 const { ATR }        = require("../../core/regime/ATRCalculator");
 const bingx          = require("../../exchange/bingx/BingXExecutor");
+const controlRoute   = require("./control");
 
 // ── GET /api/trades ───────────────────────────────────────────────────────────
 router.get("/", (req, res) => {
@@ -106,14 +107,25 @@ router.post("/open", async (req, res) => {
 
     console.log(`📥 Trade logged: ${direction} ${asset} $${amountUsdt}×${lev} [${source||"MANUAL"}]`);
 
-    // 2. If executeBingX=true, place real order on BingX
+    // 2. If executeBingX=true, check mode and place real order on BingX
     let bingxResult = null;
+    const currentMode = controlRoute.getMode ? controlRoute.getMode() : "PAPER";
     if (executeBingX) {
+      // Block live execution if system mode is PAPER or BACKTEST
+      if (currentMode !== "LIVE") {
+        return res.json({
+          ok: true, id,
+          warning: `System is in ${currentMode} mode — trade logged to DB only. Switch to LIVE mode in Control panel to execute real orders on BingX.`,
+          bingxExecuted: false,
+          mode: currentMode,
+        });
+      }
       if (!bingx.isEnabled()) {
         return res.json({
           ok: true, id,
-          warning: "BingX not configured — trade logged to DB only. Add BINGX_API_KEY and BINGX_SECRET to .env to enable live trading.",
+          warning: "BingX API keys not configured — trade logged to DB only. See setup guide below.",
           bingxExecuted: false,
+          setupRequired: true,
         });
       }
       try {
